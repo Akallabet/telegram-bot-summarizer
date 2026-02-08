@@ -11,9 +11,9 @@ export async function stopSummarizer(): Promise<void> {
   }
 }
 
-export async function generateSummary(filePath: string): Promise<string> {
+export async function generateSummary(content: string): Promise<string> {
   let summary = "";
-  const prompt = `You are an expert reader and writer. Read the file ${filePath}, which contains chat messages from telegram. Group the messages into themes, for each theme write a concise bullet point summary. If there are only a handful of messages, just summarize them without grouping. Only output the bullet points, nothing else.`;
+  const prompt = `You are an expert reader and writer. The following are chat messages from Telegram:\n\n${content}\n\nGroup the messages into themes, for each theme write a concise bullet point summary. If there are only a handful of messages, just summarize them without grouping. Only output the bullet points, nothing else.`;
   try {
     await client.start();
     const session = await client.createSession({ model: "gpt-5-mini" });

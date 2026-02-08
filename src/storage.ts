@@ -1,53 +1,104 @@
-import { appendFile, readFile, stat, unlink } from "node:fs/promises";
-import { resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 export interface ChatMessage {
   chatId: number;
+  messageId: number;
   threadId?: number;
+  userId: number;
   username: string;
   text: string;
   timestamp: number;
 }
 
-export function getChatFilePath(chatId: number, threadId?: number): string {
-  if (threadId) {
-    return resolve(`messages-${chatId}-${threadId}.txt`);
+let db: DatabaseSync | null = null;
+
+const migrations: ((db: DatabaseSync) => void)[] = [
+  (db) => {
+    db.exec(`
+			CREATE TABLE messages (
+				chat_id    INTEGER NOT NULL,
+				message_id INTEGER NOT NULL,
+				thread_id  INTEGER,
+				user_id    INTEGER NOT NULL,
+				username   TEXT    NOT NULL,
+				text       TEXT    NOT NULL,
+				timestamp  INTEGER NOT NULL,
+				PRIMARY KEY (chat_id, message_id)
+			);
+
+			CREATE INDEX idx_messages_chat_thread_ts
+				ON messages (chat_id, thread_id, timestamp DESC);
+		`);
+  },
+];
+
+export function initDatabase(path?: string): void {
+  db = new DatabaseSync(path ?? "messages.db");
+  db.exec("PRAGMA journal_mode = WAL");
+
+  const versionRow = db.prepare("PRAGMA user_version").get() as
+    | { user_version: number }
+    | undefined;
+  const currentVersion = versionRow?.user_version ?? 0;
+
+  for (let i = currentVersion; i < migrations.length; i++) {
+    migrations[i](db);
+    db.exec(`PRAGMA user_version = ${i + 1}`);
   }
-  return resolve(`messages-${chatId}.txt`);
 }
 
-export async function appendMessage(msg: ChatMessage): Promise<void> {
-  const ts = new Date(msg.timestamp * 1000).toISOString();
-  await appendFile(
-    getChatFilePath(msg.chatId, msg.threadId),
-    `[${ts}] ${msg.username}: ${msg.text}\n`,
+export function closeDatabase(): void {
+  if (db) {
+    db.close();
+    db = null;
+  }
+}
+
+export function appendMessage(msg: ChatMessage): void {
+  if (!db) throw new Error("Database not initialized");
+  const stmt = db.prepare(`
+		INSERT OR IGNORE INTO messages (chat_id, message_id, thread_id, user_id, username, text, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`);
+  stmt.run(
+    msg.chatId,
+    msg.messageId,
+    msg.threadId ?? null,
+    msg.userId,
+    msg.username,
+    msg.text,
+    msg.timestamp,
   );
 }
 
-export async function readMessages(
+export function readMessages(
   chatId: number,
   threadId?: number,
-): Promise<{ content: string; lineCount: number; filePath: string } | null> {
-  const filePath = getChatFilePath(chatId, threadId);
-  try {
-    const info = await stat(filePath);
-    if (info.size === 0) return null;
-    const content = await readFile(filePath, "utf-8");
-    const lineCount = content.split("\n").filter(Boolean).length;
-    return { content, lineCount, filePath };
-  } catch {
-    return null;
-  }
-}
+  limit?: number,
+): { content: string; messageCount: number } | null {
+  if (!db) throw new Error("Database not initialized");
+  const stmt = db.prepare(`
+		SELECT * FROM messages
+		WHERE chat_id = ? AND thread_id IS ?
+		ORDER BY timestamp DESC
+		LIMIT ?
+	`);
+  const rows = stmt.all(chatId, threadId ?? null, limit ?? -1) as {
+    username: string;
+    text: string;
+    timestamp: number;
+  }[];
 
-export async function deleteMessages(
-  chatId: number,
-  threadId?: number,
-): Promise<void> {
-  const filePath = getChatFilePath(chatId, threadId);
-  try {
-    await unlink(filePath);
-  } catch {
-    // file may not exist, ignore
-  }
+  if (rows.length === 0) return null;
+
+  // Reverse so oldest messages come first in the content
+  const lines = rows
+    .reverse()
+    .map((r) => {
+      const ts = new Date(r.timestamp * 1000).toISOString();
+      return `[${ts}] ${r.username}: ${r.text}`;
+    })
+    .join("\n");
+
+  return { content: `${lines}\n`, messageCount: rows.length };
 }

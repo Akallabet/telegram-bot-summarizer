@@ -1,6 +1,11 @@
 import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
-import { appendMessage, deleteMessages, readMessages } from "./storage.ts";
+import {
+  appendMessage,
+  closeDatabase,
+  initDatabase,
+  readMessages,
+} from "./storage.ts";
 import {
   formatSummaryMessage,
   generateSummary,
@@ -14,11 +19,14 @@ if (!TOKEN) {
 
 const bot = new Telegraf(TOKEN);
 
+initDatabase();
+
 bot.command("summarize", async (ctx) => {
   const threadId = ctx.message.message_thread_id;
   const chatId = ctx.message.chat.id;
+  const count = parseInt(ctx.message.text.split(" ")[1], 10) || undefined;
 
-  const result = await readMessages(chatId, threadId);
+  const result = readMessages(chatId, threadId, count);
   if (!result) {
     await ctx.reply("No messages to summarize!", {
       message_thread_id: threadId,
@@ -27,11 +35,12 @@ bot.command("summarize", async (ctx) => {
   }
 
   try {
-    console.log(`Read ${result.content.length} chars from ${result.filePath}`);
+    console.log(
+      `Read ${result.content.length} chars, ${result.messageCount} messages`,
+    );
     const summary = await generateSummary(result.content);
-    const text = formatSummaryMessage(result.lineCount, summary, threadId);
+    const text = formatSummaryMessage(result.messageCount, summary, threadId);
     await ctx.reply(text, { message_thread_id: threadId });
-    await deleteMessages(chatId, threadId);
   } catch (err) {
     console.error("Summarize error:", err);
     await ctx.reply("Failed to generate summary. Try again later.", {
@@ -50,9 +59,11 @@ bot.on(message("text"), async (ctx) => {
     `Received message in chat ${msg.chat.id} from ${username}: ${msg.text}`,
   );
 
-  await appendMessage({
+  appendMessage({
     chatId: msg.chat.id,
+    messageId: msg.message_id,
     threadId: msg.message_thread_id,
+    userId: msg.from?.id ?? 0,
     username,
     text: msg.text,
     timestamp: msg.date,
@@ -68,9 +79,11 @@ console.log("Bot started");
 
 process.once("SIGINT", async () => {
   bot.stop("SIGINT");
+  closeDatabase();
   await stopSummarizer();
 });
 process.once("SIGTERM", async () => {
   bot.stop("SIGTERM");
+  closeDatabase();
   await stopSummarizer();
 });
