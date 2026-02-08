@@ -6,8 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `npm install` — install dependencies
 - `npm start` — run the bot (equivalent to `node --env-file=.env bot.ts`)
+- `npm run lint` — check lint + formatting (`biome check .`)
+- `npm run format` — auto-fix lint + formatting (`biome check --write .`)
 
-There are no tests, linter, or build step. The bot runs directly via Node 24's native TypeScript support.
+There are no tests or build step. The bot runs directly via Node 24's native TypeScript support.
 
 ## Architecture
 
@@ -36,4 +38,4 @@ Single-file bot (`bot.ts`, ~125 lines) that stores Telegram group chat messages 
 - **ESM only**: `"type": "module"` in package.json. Use `import`, not `require`.
 - **Telegram API limitation**: Bots cannot retrieve past chat history. All messages must be captured live via polling.
 - **Environment variables**: `TELEGRAM_BOT_TOKEN` and `ANTHROPIC_API_KEY` must be set in `.env` (loaded via `--env-file`).
-- **Single dependency**: `@anthropic-ai/claude-agent-sdk` — no other runtime deps.
+- **Single runtime dependency**: `@anthropic-ai/claude-agent-sdk` — no other runtime deps. `@biomejs/biome` is a dev dependency for linting/formatting.

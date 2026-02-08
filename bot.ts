@@ -1,9 +1,9 @@
-import { query } from "@anthropic-ai/claude-agent-sdk";
-import { appendFile, unlink, stat, readFile } from "node:fs/promises";
+import { appendFile, readFile, stat, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || 'test';
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || "test";
 if (!TOKEN || !ANTHROPIC_KEY) {
   console.error("Set TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY");
   process.exit(1);
@@ -25,7 +25,9 @@ function chatFile(chatId: number) {
 
 async function handleMessage(msg: any, botId: number) {
   if (!msg.text || msg.from?.id === botId) return;
-console.log(`Received message in chat ${msg.chat.id} from ${msg.from?.username || msg.from?.first_name}: ${msg.text}`);
+  console.log(
+    `Received message in chat ${msg.chat.id} from ${msg.from?.username || msg.from?.first_name}: ${msg.text}`,
+  );
   const name = msg.from?.username ?? msg.from?.first_name ?? "unknown";
   const ts = new Date(msg.date * 1000).toISOString();
   await appendFile(chatFile(msg.chat.id), `[${ts}] ${name}: ${msg.text}\n`);
@@ -101,7 +103,7 @@ async function main() {
         timeout: 30,
       });
       if (!updates.ok) throw new Error("getUpdates failed");
-    console.log(`Received ${updates.result.length} updates`);
+      console.log(`Received ${updates.result.length} updates`);
 
       for (const update of updates.result) {
         offset = update.update_id + 1;
