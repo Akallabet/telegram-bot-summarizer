@@ -1,0 +1,15 @@
+{
+  "name": "bot-telegram-summarizer",
+  "version": "1.0.0",
+  "description": "Telegram group chat summarizer bot powered by Claude",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "bot.ts",
+  "scripts": {
+    "start": "node --env-file=.env bot.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0"
+  }
+}
